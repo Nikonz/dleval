@@ -1,6 +1,6 @@
 from moodleclient import Client
 
-token = '011159db80017519a17d93afa280f5f4'
+token = '0f2e75e36edb0e43ddab132c553eaf24'
 domain = 'https://sandbox.moodledemo.net'
 course_id = 2
 
