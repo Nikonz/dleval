@@ -6,7 +6,8 @@ import os
 class Client:
     def __init__(self, token, domain, course_id):
         self.timeout = 30 # FIXME unused
-        # TODO retry
+        # TODO retries
+        # TODO normal log messages
 
         self.token = token
         self.domain = domain
@@ -23,18 +24,33 @@ class Client:
         self.logger.addHandler(ch)
 
     def __parse_json(self, data):
-        return json.loads(data)
+        try:
+            return json.loads(data)
+        except Exception as e:
+            errmsg = e.message if hasattr(e, 'message') else str(e)
+            self.logger.error('can not parse json: ' +
+                    errmsg + ' [data=%s]' % data)
+            return None
 
-    def __run_php(self, path, args):
+    def __run_php(self, path, args, no_response=False):
         try:
             result = subprocess.check_output(
                 ['php', path, self.token, self.domain] + args,
             )
-            return self.__parse_json(result)
         except Exception as e:
             errmsg = e.message if hasattr(e, 'message') else str(e)
-            self.logger.error(errmsg)
+            self.logger.error(errmsg + ' [args=%s]' % args)
             return None
+
+        # FIXME ugly
+        if no_response:
+            return {}
+
+        parsed_result = self.__parse_json(result)
+        if parsed_result is None:
+            self.logger.warning('parse_json failed, skip')
+            return None
+        return self.__parse_json(result)
 
     def __update_assignments(self):
         args = [str(self.course_id)]
@@ -75,8 +91,22 @@ class Client:
         if not 'files' in filearea:
             self.logger.error('no files' + log_msg_suffix)
             return False
+
+        # TODO check timestamp
+
+        # FIXME timestamp
+        dir_path = ('./data/submissions/%d/%d' % \
+                (assignment_id, submission_id))
+        os.makedirs(dir_path, exist_ok=True)
         for f in filearea['files']:
-            print(f['fileurl'])
+            fpath = dir_path + '/' + f['filename']
+            args = [f['fileurl'], fpath]
+            resp = self.__run_php('php/download_file.php',
+                    args, no_response=True)
+            if resp is None:
+                # TODO
+                self.logger.warning('run_php failed, skip')
+                return False
         return True
 
     def __download_plugin_files(self, plugin, assignment_id, submission_id,
