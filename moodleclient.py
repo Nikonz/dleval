@@ -1,27 +1,21 @@
 import json
 import logging
-import subprocess
 import os
+import subprocess
 
 class Client:
-    def __init__(self, token, domain, course_id):
-        self.timeout = 30 # FIXME unused
+    def __init__(self, token, domain, course_id, logger):
+        # self.timeout = 30 # FIXME unused
         # TODO retries
         # TODO normal log messages
 
         self.token = token
         self.domain = domain
         self.course_id = course_id
-        self.assignments = None
+        self.logger = logger
 
-        self.logger = logging.getLogger()
-        self.logger.setLevel(logging.INFO)
-        ch = logging.StreamHandler()
-        formatter = logging.Formatter(
-                '%(asctime)s [%(levelname)s]: %(message)s ' \
-                '(%(module)s:%(funcName)s:%(lineno)d)')
-        ch.setFormatter(formatter)
-        self.logger.addHandler(ch)
+        self.assignments = None
+        self.updated = {}
 
     def __parse_json(self, data):
         try:
@@ -64,9 +58,7 @@ class Client:
                     len(self.assignments))
             return True
         except Exception as e:
-            errmsg = e.message if hasattr(e, 'message') else str(e)
-            self.logger.error('bad php response: ' + errmsg)
-            print(resp) # FIXME
+            self.logger.error('bad php response: ' + str(resp))
             self.assignments = None
             return False
 
@@ -81,83 +73,116 @@ class Client:
         if resp is None:
             self.logger.warning('update_assignments failed')
             return None
-        if not 'assignments' in resp:
-            self.logger.error('bad php response: no assignments')
-            return None
-        return resp['assignments']
 
-    def __download_filearea_files(self, filearea, assignment_id, submission_id,
-                timestamp, log_msg_suffix):
-        if not 'files' in filearea:
+        submissions = resp.get('assignments')
+        if submissions is None:
+            self.logger.error('bad php response: no assignments')
+        return submissions
+
+    def __download_filearea_files(self, filearea,
+                assignment_id, submission_id, log_msg_suffix):
+        files = filearea['files']
+        if files is None:
             self.logger.error('no files' + log_msg_suffix)
             return False
 
-        # TODO check timestamp
-
-        # FIXME timestamp
-        dir_path = ('./data/submissions/%d/%d' % \
+        dir_path = ('./data/submissions/assignment_%d/submission_%d' % \
                 (assignment_id, submission_id))
         os.makedirs(dir_path, exist_ok=True)
-        for f in filearea['files']:
+        for f in files:
             fpath = dir_path + '/' + f['filename']
             args = [f['fileurl'], fpath]
             resp = self.__run_php('php/download_file.php',
                     args, no_response=True)
             if resp is None:
-                # TODO
                 self.logger.warning('run_php failed, skip')
                 return False
         return True
 
-    def __download_plugin_files(self, plugin, assignment_id, submission_id,
-            timestamp, log_msg_suffix):
-        if not 'fileareas' in plugin:
+    def __download_plugin_files(self, plugin,
+            assignment_id, submission_id, log_msg_suffix):
+        fileareas = plugin.get('fileareas')
+        if fileareas is None:
             self.logger.error('no fileareas' + log_msg_suffix)
             return False
-        for filearea in plugin['fileareas']: # TODO check
+
+        for filearea in fileareas:
             if filearea['area'] == 'submission_files':
                 success = self.__download_filearea_files(filearea,
-                        assignment_id, submission_id, timestamp, log_msg_suffix)
+                        assignment_id, submission_id, log_msg_suffix)
                 if not success:
+                    self.logger.warning(
+                            'download_filearea_files failed, skip ' + log_msg_suffix)
                     return False
                 return True
-        # TODO logging
+        self.logger.error('no submission files in filearea ' + log_msg_suffix)
         return False
 
-    def __download_submission(self, assignment_id, submission):
-        # TODO log username
-        submission_id = submission['id']
-        timestamp = submission['timemodified']
-        log_msg_suffix = \
-            ' [assignment_id=%d, submission_id=%d, timestamp=%d]' % \
-            (assignment_id, submission_id, timestamp)
-
-        if not 'plugins' in submission:
+    def __download_submission(self, assignment_id, submission, log_msg_suffix):
+        plugins = submission.get('plugins')
+        if plugins is None:
             self.logger.error('no plugins ' + log_msg_suffix)
-        for plugin in submission['plugins']:
+            return False
+
+        submission_id = submission['id']
+
+        for plugin in plugins:
             if plugin['type'] == 'file' and \
                     plugin['name'] == 'File submissions': # XXX check name too ?
                 success = self.__download_plugin_files(plugin,
-                        assignment_id, submission_id, timestamp, log_msg_suffix)
+                        assignment_id, submission_id, log_msg_suffix)
                 if not success:
+                    self.logger.warning(
+                            'download_plugin_files failed, skip ' + log_msg_suffix)
                     return False
-                # TODO logging
-                # TODO store
                 return True
-        # TODO logging
+        self.logger.error('no submission files in plugin ' + log_msg_suffix)
         return False
 
     def download_new_submissions(self):
         submissions = self.__get_submissions();
         if submissions is None:
             self.logger.warning('get_submissions failed, skip')
-            return False
+            return []
 
+        new_submissions = []
         for assignment in submissions:
+            # TODO log assignment names
             assignment_id = assignment["assignmentid"]
             for submission in assignment['submissions']:
-                print(submission)
-                success = self.__download_submission(assignment_id, submission)
+                #print(submission)
+                submission_id = submission['id']
+                timestamp = submission['timemodified']
+                status = submission['status']
+
+                # TODO log username
+                log_msg_suffix = \
+                    ' [assignment_id=%d, submission_id=%d, timestamp=%d]' % \
+                    (assignment_id, submission_id, timestamp)
+
+                if status == 'new':
+                    continue
+                if status != 'submitted':
+                    self.logger.warning(
+                            "unusual status '%s', submission was skipped"
+                            % status + log_msg_suffix)
+                    continue
+
+                prev_timestamp = \
+                        self.updated.get((assignment_id, submission_id), 0)
+
+                if prev_timestamp < timestamp:
+                    t = 'new' if prev_timestamp == 0 else 'updated'
+                    self.logger.info('got %s submission' % t + log_msg_suffix)
+
+                success = self.__download_submission(
+                        assignment_id, submission, log_msg_suffix)
                 if not success:
-                    # TODO logging
-                    pass
+                    self.logger.warning(
+                            'download submission failed, skip ' + log_msg_suffix)
+                    continue
+
+                self.updated[(assignment_id, submission_id)] = timestamp
+                new_submissions.append((assignment_id, submission_id))
+
+        return new_submissions
