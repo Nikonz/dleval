@@ -15,7 +15,7 @@ class Client:
         self.logger = logger
 
         self.assignments = None
-        self.updated = {}
+        self.last_attempt = {}
 
     def __parse_json(self, data):
         try:
@@ -90,6 +90,7 @@ class Client:
                 (assignment_id, submission_id))
         os.makedirs(dir_path, exist_ok=True)
         for f in files:
+            # TODO download only new files
             fpath = dir_path + '/' + f['filename']
             args = [f['fileurl'], fpath]
             resp = self.__run_php('php/download_file.php',
@@ -150,17 +151,19 @@ class Client:
             # TODO log assignment names
             assignment_id = assignment["assignmentid"]
             for submission in assignment['submissions']:
-                #print(submission)
+                # XXX add group id ?
                 submission_id = submission['id']
-                timestamp = submission['timemodified']
+                user_id = submission['userid']
+                #timestamp = submission['timemodified']
                 status = submission['status']
+                attempt = submission['attemptnumber']
 
                 # TODO log username
                 log_msg_suffix = \
-                    ' [assignment_id=%d, submission_id=%d, timestamp=%d]' % \
-                    (assignment_id, submission_id, timestamp)
+                    ' [assignment_id=%d, submission_id=%d, user_id=%d, attempt=%d]' \
+                    % (assignment_id, submission_id, user_id, attempt)
 
-                if status == 'new':
+                if status == 'new' or status == 'draft' or status == 'reopened':
                     continue
                 if status != 'submitted':
                     self.logger.warning(
@@ -168,11 +171,10 @@ class Client:
                             % status + log_msg_suffix)
                     continue
 
-                prev_timestamp = \
-                        self.updated.get((assignment_id, submission_id), 0)
-
-                if prev_timestamp < timestamp:
-                    t = 'new' if prev_timestamp == 0 else 'updated'
+                prev_attempt = \
+                        self.last_attempt.get((assignment_id, submission_id), -1)
+                if prev_attempt < attempt:
+                    t = 'new' if attempt == 0 else 'updated'
                     self.logger.info('got %s submission' % t + log_msg_suffix)
 
                 success = self.__download_submission(
@@ -182,7 +184,7 @@ class Client:
                             'download submission failed, skip ' + log_msg_suffix)
                     continue
 
-                self.updated[(assignment_id, submission_id)] = timestamp
+                self.last_attempt[(assignment_id, submission_id)] = attempt
                 new_submissions.append((assignment_id, submission_id))
 
         return new_submissions
