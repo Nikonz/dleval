@@ -1,0 +1,7 @@
+
+moodle:
+    token: 49c870a0eff3b8f7eb08781db625a94e
+    domain: https://sandbox.moodledemo.net
+    course_id: 2
+
+interval: 60

@@ -186,3 +186,7 @@ class Client:
                 new_submissions.append((assignment_id, submission_id))
 
         return new_submissions
+
+    def send_grades(self, grades):
+        print('Send grades!')
+        pass
