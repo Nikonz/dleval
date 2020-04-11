@@ -1,7 +1,7 @@
 import json
-import logging
 import os
 import subprocess
+import utils
 
 class Client:
     def __init__(self, token, domain, course_id, logger):
@@ -80,14 +80,15 @@ class Client:
         return submissions
 
     def __download_filearea_files(self, filearea,
-                assignment_id, submission_id, log_msg_suffix):
+                assignment_id, user_id, attempt, log_msg_suffix):
         files = filearea['files']
         if files is None:
             self.logger.error('no files' + log_msg_suffix)
             return False
 
-        dir_path = ('./data/submissions/assignment_%d/submission_%d' % \
-                (assignment_id, submission_id))
+        dir_path = utils.get_submission_directory(
+                assignment_id, user_id, attempt)
+
         os.makedirs(dir_path, exist_ok=True)
         for f in files:
             # TODO download only new files
@@ -101,7 +102,7 @@ class Client:
         return True
 
     def __download_plugin_files(self, plugin,
-            assignment_id, submission_id, log_msg_suffix):
+            assignment_id, user_id, attempt, log_msg_suffix):
         fileareas = plugin.get('fileareas')
         if fileareas is None:
             self.logger.error('no fileareas' + log_msg_suffix)
@@ -110,34 +111,35 @@ class Client:
         for filearea in fileareas:
             if filearea['area'] == 'submission_files':
                 success = self.__download_filearea_files(filearea,
-                        assignment_id, submission_id, log_msg_suffix)
+                        assignment_id, user_id, attempt, log_msg_suffix)
                 if not success:
                     self.logger.warning(
-                            'download_filearea_files failed, skip ' + log_msg_suffix)
+                            'download_filearea_files failed, skip' + log_msg_suffix)
                     return False
                 return True
-        self.logger.error('no submission files in filearea ' + log_msg_suffix)
+        self.logger.error('no submission files in filearea' + log_msg_suffix)
         return False
 
     def __download_submission(self, assignment_id, submission, log_msg_suffix):
         plugins = submission.get('plugins')
         if plugins is None:
-            self.logger.error('no plugins ' + log_msg_suffix)
+            self.logger.error('no plugins' + log_msg_suffix)
             return False
 
-        submission_id = submission['id']
+        user_id = submission['userid']
+        attempt = submission['attemptnumber']
 
         for plugin in plugins:
             if plugin['type'] == 'file' and \
                     plugin['name'] == 'File submissions': # XXX check name too ?
                 success = self.__download_plugin_files(plugin,
-                        assignment_id, submission_id, log_msg_suffix)
+                        assignment_id, user_id, attempt, log_msg_suffix)
                 if not success:
                     self.logger.warning(
-                            'download_plugin_files failed, skip ' + log_msg_suffix)
+                            'download_plugin_files failed, skip' + log_msg_suffix)
                     return False
                 return True
-        self.logger.error('no submission files in plugin ' + log_msg_suffix)
+        self.logger.error('no submission files in plugin' + log_msg_suffix)
         return False
 
     def download_new_submissions(self):
@@ -154,14 +156,15 @@ class Client:
                 # XXX add group id ?
                 submission_id = submission['id']
                 user_id = submission['userid']
-                #timestamp = submission['timemodified']
                 status = submission['status']
                 attempt = submission['attemptnumber']
+                timestamp = submission['timemodified']
 
-                # TODO log username
+                # TODO find a way to log username
                 log_msg_suffix = \
-                    ' [assignment_id=%d, submission_id=%d, user_id=%d, attempt=%d]' \
-                    % (assignment_id, submission_id, user_id, attempt)
+                    ' [assignment_id=%d, submission_id=%d, ' \
+                    'user_id=%d, attempt=%d, timestamp=%d]' \
+                    % (assignment_id, submission_id, user_id, attempt, timestamp)
 
                 if status == 'new' or status == 'draft' or status == 'reopened':
                     continue
@@ -181,11 +184,11 @@ class Client:
                         assignment_id, submission, log_msg_suffix)
                 if not success:
                     self.logger.warning(
-                            'download submission failed, skip ' + log_msg_suffix)
+                            'download_submission failed, skip' + log_msg_suffix)
                     continue
 
                 self.last_attempt[(assignment_id, submission_id)] = attempt
-                new_submissions.append((assignment_id, submission_id))
+                new_submissions.append((assignment_id, user_id, attempt))
 
         return new_submissions
 
