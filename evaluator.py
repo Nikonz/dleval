@@ -37,6 +37,9 @@ class Evaluator:
                         log_msg_suffix)
                 continue
 
+            if not assignment_id in results:
+                results[assignment_id] = []
+
             results[assignment_id].append({
                     "userid": user_id,
                     "grade": grade,

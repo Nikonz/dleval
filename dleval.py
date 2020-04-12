@@ -34,8 +34,8 @@ class DlEval:
         while True:
             try:
                 new_submissions = self.client.download_new_submissions()
-                grades = self.evaluator.evaluate(new_submissions)
-                self.client.send_grades(grades)
+                results = self.evaluator.evaluate(new_submissions)
+                self.client.send_results(results) # TODO retries !!
             except Exception:
                 # FIXME fstring
                 tback = repr(traceback.format_exception(*sys.exc_info()))

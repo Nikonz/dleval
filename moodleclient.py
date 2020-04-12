@@ -76,7 +76,7 @@ class Client:
 
         submissions = resp.get('assignments')
         if submissions is None:
-            self.logger.error('bad php response: no assignments')
+            self.logger.error('bad php response: no assignments') # FIXME
         return submissions
 
     def __download_filearea_files(self, filearea,
@@ -192,6 +192,13 @@ class Client:
 
         return new_submissions
 
-    def send_grades(self, grades):
-        print('Send grades!')
-        pass
+    def send_results(self, results):
+        for assignment_id, grades in results.items():
+            args = [str(self.course_id), str(assignment_id),
+                    json.dumps(grades)]
+            resp = self.__run_php('php/set_grades.php', args)
+            if resp is None:
+                self.logger.warning('run_php failed, skip' \
+                        '[assignment_id=%d]' % assignment_id)
+                return False
+        return True
