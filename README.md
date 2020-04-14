@@ -11,11 +11,13 @@ and put it to config.yaml.
 
 Login as a teacher (https://sandbox.moodledemo.net/login/).
 
-Create a new assignment (add an activity or resourse) for the course (https://sandbox.moodledemo.net/course/view.php?id=2). Choose "Manually" for the "Attempts reopened" field in "Submission setting" section.
+Create a new assignment (add an activity or resourse) for the course (https://sandbox.moodledemo.net/course/view.php?id=2). Choose "Manually" for the "Attempts reopened" field in the "Submission setting" section.
 
 Login as a student and make a submission.
 
+```
 python dleval.py
+```
 
 ???
 
