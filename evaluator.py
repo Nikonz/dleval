@@ -40,6 +40,7 @@ class Evaluator:
             if not assignment_id in results:
                 results[assignment_id] = []
 
+            # TODO add text
             results[assignment_id].append({
                     "userid": user_id,
                     "grade": grade,
