@@ -56,11 +56,22 @@ class Client:
             self.assignments = resp['courses'][0]['assignments'] # FIXME
             self.logger.info('got %d assignments' %
                     len(self.assignments))
-            return True
         except Exception as e:
             self.logger.error('bad php response: ' + str(resp))
             self.assignments = None
             return False
+
+        # FIXME ugly, TODO as a part of the future daemon API
+        assignments_info_path = utils.get_assignments_info_path()
+
+        with open(assignments_info_path, 'w') as f:
+            for assignment in self.assignments:
+                assignment_info = "`%s' --> `assignment_%s'" % \
+                        (assignment['name'], assignment['id'])
+                self.logger.info(assignment_info)
+                f.write(assignment_info)
+
+        return True
 
     def __get_submissions(self):
         success = self.__update_assignments()
