@@ -1,4 +1,3 @@
-import json
 import os
 import subprocess
 import utils
@@ -9,6 +8,7 @@ class Client:
         # TODO retries
         # TODO normal log messages
 
+        # TODO make private
         self.token = token
         self.domain = domain
         self.course_id = course_id
@@ -17,40 +17,36 @@ class Client:
         self.assignments = None
         self.last_attempt = {}
 
-    def __parse_json(self, data):
-        try:
-            return json.loads(data)
-        except Exception as e:
-            errmsg = e.message if hasattr(e, 'message') else str(e)
-            self.logger.error('can not parse json: ' +
-                    errmsg + ' [data=%s]' % data)
-            return None
-
     def __run_php(self, path, args, no_response=False):
         try:
-            result = subprocess.check_output(
+            resp = subprocess.check_output(
                 ['php', path, self.token, self.domain] + args,
             )
         except Exception as e:
             errmsg = e.message if hasattr(e, 'message') else str(e)
             self.logger.error(errmsg + ' [args=%s]' % args)
-            return None
+            return (None, False)
 
         # FIXME ugly
         if no_response:
-            return {}
+            return ({}, True)
 
-        parsed_result = self.__parse_json(result)
-        if parsed_result is None:
+        self.logger.debug("resp=`%s'" % resp)
+
+        parsed_resp, ok = utils.parse_json(resp, self.logger)
+        if not ok:
             self.logger.warning('parse_json failed, skip')
-            return None
-        return self.__parse_json(result)
+            return (None, True)
+        return parsed_resp, ok
 
     def __update_assignments(self):
         args = [str(self.course_id)]
-        resp = self.__run_php('php/get_assignments.php', args)
-        if resp is None:
+        resp, ok = self.__run_php('php/get_assignments.php', args)
+        if not ok:
             self.logger.warning('run_php failed, skip')
+            return False
+        if resp is None:
+            self.logger.error('unexpected empty response')
             return False
         try:
             self.assignments = resp['courses'][0]['assignments'] # FIXME
@@ -62,8 +58,10 @@ class Client:
             return False
 
         # FIXME ugly, TODO as a part of the future daemon API
-        assignments_info_path = utils.get_assignments_info_path()
+        assignments_info_directory = utils.get_assignments_info_directory()
+        os.makedirs(assignments_info_directory, exist_ok=True)
 
+        assignments_info_path = assignments_info_directory + '/assignments_info.txt'
         with open(assignments_info_path, 'w') as f:
             for assignment in self.assignments:
                 assignment_info = "`%s' --> `assignment_%s'" % \
@@ -80,9 +78,12 @@ class Client:
             return None
 
         args = [str(asgn['id']) for asgn in self.assignments]
-        resp = self.__run_php('php/get_submissions.php', args)
-        if resp is None:
+        resp, ok = self.__run_php('php/get_submissions.php', args)
+        if not ok:
             self.logger.warning('update_assignments failed')
+            return None
+        if resp is None:
+            self.logger.error('unexpected empty response')
             return None
 
         submissions = resp.get('assignments')
@@ -105,10 +106,13 @@ class Client:
             # TODO download only new files
             fpath = dir_path + '/' + f['filename']
             args = [f['fileurl'], fpath]
-            resp = self.__run_php('php/download_file.php',
+            resp, ok = self.__run_php('php/download_file.php',
                     args, no_response=True)
-            if resp is None:
+            if not ok or resp is None:
                 self.logger.warning('run_php failed, skip')
+                return False
+            if resp is None:
+                self.logger.error('unexpected empty response')
                 return False
         return True
 
@@ -187,9 +191,11 @@ class Client:
 
                 prev_attempt = \
                         self.last_attempt.get((assignment_id, submission_id), -1)
-                if prev_attempt < attempt:
-                    t = 'new' if attempt == 0 else 'updated'
-                    self.logger.info('got %s submission' % t + log_msg_suffix)
+                if prev_attempt == attempt:
+                    continue
+
+                t = 'new' if attempt == 0 else 'updated'
+                self.logger.info('got %s submission' % t + log_msg_suffix)
 
                 success = self.__download_submission(
                         assignment_id, submission, log_msg_suffix)
@@ -198,6 +204,7 @@ class Client:
                             'download_submission failed, skip' + log_msg_suffix)
                     continue
 
+                # TODO store to file or DB
                 self.last_attempt[(assignment_id, submission_id)] = attempt
                 new_submissions.append((assignment_id, user_id, attempt))
 
@@ -206,10 +213,15 @@ class Client:
     def send_results(self, results):
         for assignment_id, grades in results.items():
             args = [str(self.course_id), str(assignment_id),
-                    json.dumps(grades)]
-            resp = self.__run_php('php/set_grades.php', args)
-            if resp is None:
+                    utils.pack_json(grades)]
+            resp, ok = self.__run_php('php/set_grades.php', args)
+            if not ok:
                 self.logger.warning('run_php failed, skip' \
                         '[assignment_id=%d]' % assignment_id)
                 return False
+            if resp is not None:
+                self.logger.error("unexpected NON-empty response, `got %s'" % resp)
+                return False
+            # TODO store failed to file or DB
+            # TODO move there: self.last_attempt[(assignment_id, submission_id)] = attempt
         return True
