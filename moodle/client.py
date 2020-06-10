@@ -2,8 +2,11 @@ from datetime import datetime
 import locale
 import os
 import pandas as pd
+import shutil
+
 from robobrowser import RoboBrowser
 
+from moodle.objects import Course, Assignment, Submission
 from moodle import utils
 
 CAS_URL = 'https://cas.zimt.uni-siegen.de/cas/login'
@@ -22,57 +25,86 @@ class Client:
 
     def login(self, username, password):
         """
-        :param str: username: ZIMT username
-        :param str: password: ZIMT password
+        :param str username: ZIMT username
+        :param str password: ZIMT password
         """
         self.__browser.open(CAS_URL)
-        print(self.__browser.get_forms())
         login_form = self.__browser.get_forms()[0]
         login_form['username'].value = username
         login_form['password'].value = password
         self.__browser.submit_form(login_form)
 
-    def download_new_submissions(self, course_id):
+    def download_new_course_data(self, course_id):
         """
         :param int course_id: Id of the course (can be found in the course url)
         """
         main_page = utils.get_course_main_page(MOODLE_DOMAIN, course_id)
         self.__browser.open(main_page)
-        # course_name = self.__browser.select('.page-header-headings')[0].h1.string
 
-        new_submissions = []
+        course_name = self.__browser.select('.page-header-headings')[0].h1.string
+        course_data = Course(course_id, course_name)
+
         for section in self.__browser.find_all(class_='section main clearfix'):
-            new_submissions.extend(
-                    self.__download_section(section, self.__data_path))
-        return new_submissions
+            for assign in section.find_all(class_='activity assign modtype_assign'):
+                assign_id = assign['id'].split('-')[1]
+                course_data.add_assignment(
+                        self.__download_new_assignment_data(
+                        assign_id,
+                        self.__data_path))
+        return course_data
 
     def send_feedback(self, feedback):
         """
-        :param dict (of dicts) feedback:
-                Grades and comments for each submission (key=(user_id, timestamp))
-                of each assignment (key=assignment_id)
+        :param moodle.objects.Course feedback: course data with grades and comments
         """
-        for assign_id, assign_data in feedback:
+        for assign_data in feedback.assignments():
             submissions_page = \
-                    utils.get_view_submissions_page(MOODLE_DOMAIN, assign_id)
+                    utils.get_view_submissions_page(MOODLE_DOMAIN, assign_data.id)
             self.__browser.open(submissions_page)
 
+            options_form = None
             for form in self.__browser.get_forms():
-                user_id = self.__parse_grade_form(form)
-                if user_id is None:
-                    continue
+                if self.__is_options_form(form):
+                    options_form = form
+                    break
+            if options_form is None:
+                # TODO log
+                continue
+            if not self.__fill_options_form(options_form):
+                # TODO log
+                continue
+            self.__browser.submit_form(options_form)
 
+            grading_form = None
+            for form in self.__browser.get_forms():
+                if self.__is_grading_form(form):
+                    grading_form = form
+                    break
+            if grading_form is None:
+                # TODO log
+                continue
+
+            for subm_data in assign_data.submissions():
                 subm = self.__browser.find(
-                        class_='user{} unselected row'.format(user_id))
-                # TODO check if still exists
-                subm_ts = self.__parse_timestamp(subm.find(class_='cell c7').contents[0])
-                if (user_id, subm_ts) not in assign_data:
+                        class_='user{}'.format(subm_data.user_id))
+                if subm is None:
                     continue
-
-                grade, comment = assign_data[user_id, subm_ts]
-                self.__submit_grade_form(form, user_id, grade, comment)
+                submitted = subm.find(class_='submissionstatussubmitted')
+                if submitted is None:
+                    continue
+                subm_ts = self.__parse_timestamp(
+                        subm.find(class_='cell c7').contents[0])
+                if subm_data.timestamp != subm_ts:
+                    # TODO log
+                    continue
+                if not self.__fill_grading_form(grading_form, subm_data):
+                    # TODO log
+                    continue
+                # TODO log
+            self.__browser.submit_form(grading_form)
 
     def __parse_timestamp(self, date_str, date_locale='de_DE.utf8'):
+        # FIXME AM PM
         cur_locale = locale.getlocale()
         locale.setlocale(locale.LC_ALL, date_locale) # XXX install locale
         timestamp = datetime.strptime(
@@ -92,61 +124,85 @@ class Client:
 
     def __download_submission(self, subm, path):
         user_id = subm['class'][0][4:]
-        subm_path = os.path.join(path, 'user_' + user_id)
+        timestamp = self.__parse_timestamp(subm.find(class_='cell c7').contents[0])
 
+        subm_path = os.path.join(path, 'user_' + user_id)
+        subm_data = Submission(user_id, timestamp, subm_path)
+
+        shutil.rmtree(subm_path, ignore_errors=True)
         os.makedirs(subm_path, exist_ok=True)
         for f in subm.find_all(class_='fileuploadsubmission'):
             name = f.a.contents[0]
             link = f.a['href']
-            print(path)
             if not self.__download_file(link, os.path.join(subm_path, name)):
                 # TODO log
-                return False
-        return True
+                return None
+        return subm_data
 
-    def __download_assignment(self, assign_id, path):
+    def __download_new_assignment_data(self, assign_id, path):
         submissions_page = utils.get_view_submissions_page(MOODLE_DOMAIN, assign_id)
         self.__browser.open(submissions_page)
         table = self.__browser.find(class_='flexible generaltable generalbox')
 
-        new_submissions = []
+        assign_path = os.path.join(path, 'assignment_' + assign_id)
+        assign_name = self.__browser.find(role='main').h2.string
+        assign_data = Assignment(assign_id, assign_name)
+
         for subm in table.tbody.find_all('tr'):
             submitted = subm.find(class_='submissionstatussubmitted')
-            graded = subm.find(class_='submissiongraded')
-            if submitted is None or graded is not None:
+            if submitted is None:
                 continue
-
+            graded = subm.find(class_='submissiongraded')
             subm_ts = self.__parse_timestamp(subm.find(class_='cell c7').contents[0])
             grade_ts = self.__parse_timestamp(subm.find(class_='cell c10').contents[0])
-            if subm_ts + 60 < grade_ts: # XXX +60 - in case of delays
+            if graded and subm_ts + 60 < grade_ts: # XXX +1 minute - to retest in case of delays
+                # FIXME AM PM
                 continue
-
-            ok = self.__download_submission(
-                    subm, os.path.join(path, 'assignment_' + assign_id))
-            if ok:
-                user_id = subm['class'][0][4:]
-                new_submissions.append((assign_id, user_id, subm_ts))
+            subm_data = self.__download_submission(subm, assign_path)
+            if subm_data is not None:
+                assign_data.add_submission(subm_data)
             else:
                 # TODO log
                 pass
-        return new_submissions
+        return assign_data
 
-    def __download_section(self, section, path):
-        new_submissions = []
+    def __download_new_section_data(self, section, path):
+        section_data = []
         for assign in section.find_all(class_='activity assign modtype_assign'):
             assign_id = assign['id'].split('-')[1]
-            new_submissions.extend(self.__download_assignment(assign_id, path))
-        return new_submissions
+            section_data.append(self.__download_new_assignment_data(assign_id, path))
+        return section_data
 
-    def __parse_grade_form(self, form):
-        user_id = None
+    def __is_options_form(self, form):
         for field in form.keys():
-            if field.startswith('quickgrade_comments_'):
-                user_id = field.split('_')[-1]
-                break
-        return user_id
+            if field == 'quickgrading':
+                return True
+        return False
 
-    def __submit_grade_form(self, form, user_id, grade, comment):
-        form['quickgrade_' + user_id] = grade
-        form['quickgrade_comments_' + user_id] = comment
-        self.__browser.submit_form(form)
+    def __fill_options_form(self, form):
+        try:
+            form['filter'] = ''
+            form['perpage'] = '-1'
+            form['quickgrading'] = ['1']
+            return True
+        except:
+            return False
+
+    def __is_grading_form(self, form):
+        for field in form.keys():
+            if field.startswith('quickgrade_'):
+                return True
+        return False
+
+    def __fill_grading_form(self, form, subm):
+        try:
+            form['quickgrade_' + subm.user_id] = subm.grade
+            # it is necessary to update form even if the data is the same
+            old_comment = form['quickgrade_comments_' + subm.user_id].value
+            new_comment = subm.comment
+            if new_comment == old_comment:
+                new_comment += ' '
+            form['quickgrade_comments_' + subm.user_id] = new_comment
+            return True
+        except:
+            return False
