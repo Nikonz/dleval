@@ -1,3 +1,5 @@
+[This readme is outdated. It is related to the \`api' branch version]
+
 # dleval
 New and fancy exercises evaluation system for the "Deep Learning" course!
 
