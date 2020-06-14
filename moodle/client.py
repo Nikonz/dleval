@@ -6,8 +6,9 @@ import shutil
 
 from robobrowser import RoboBrowser
 
+import utils
 from moodle.objects import Course, Assignment, Submission
-from moodle import utils
+from moodle import utils as moodleutils
 
 CAS_URL = 'https://cas.zimt.uni-siegen.de/cas/login'
 MOODLE_DOMAIN = 'moodle.uni-siegen.de'
@@ -38,7 +39,7 @@ class Client:
         """
         :param int course_id: Id of the course (can be found in the course url)
         """
-        main_page = utils.get_course_main_page(MOODLE_DOMAIN, course_id)
+        main_page = moodleutils.get_course_main_page(MOODLE_DOMAIN, course_id)
         self.__browser.open(main_page)
 
         course_name = self.__browser.select('.page-header-headings')[0].h1.string
@@ -53,13 +54,13 @@ class Client:
                         self.__data_path))
         return course_data
 
-    def send_feedback(self, feedback):
+    def send_feedback(self, course_data):
         """
-        :param moodle.objects.Course feedback: course data with grades and comments
+        :param moodle.objects.Course course_data: course data with grades and comments
         """
-        for assign_data in feedback.assignments():
+        for assign_data in course_data.assignments():
             submissions_page = \
-                    utils.get_view_submissions_page(MOODLE_DOMAIN, assign_data.id)
+                    moodleutils.get_view_submissions_page(MOODLE_DOMAIN, assign_data.id)
             self.__browser.open(submissions_page)
 
             options_form = None
@@ -85,6 +86,8 @@ class Client:
                 continue
 
             for subm_data in assign_data.submissions():
+                if subm_data.grade is None:
+                    continue
                 subm = self.__browser.find(
                         class_='user{}'.format(subm_data.user_id))
                 if subm is None:
@@ -104,11 +107,10 @@ class Client:
             self.__browser.submit_form(grading_form)
 
     def __parse_timestamp(self, date_str, date_locale='de_DE.utf8'):
-        # FIXME AM PM
         cur_locale = locale.getlocale()
         locale.setlocale(locale.LC_ALL, date_locale) # XXX install locale
         timestamp = datetime.strptime(
-                date_str, '%A, %d %B %Y, %H:%M ').timestamp()
+                date_str, '%A, %d. %B %Y, %H:%M').timestamp()
         locale.setlocale(locale.LC_ALL, cur_locale)
         return timestamp
 
@@ -129,8 +131,8 @@ class Client:
         subm_path = os.path.join(path, 'user_' + user_id)
         subm_data = Submission(user_id, timestamp, subm_path)
 
-        shutil.rmtree(subm_path, ignore_errors=True)
-        os.makedirs(subm_path, exist_ok=True)
+        utils.remove_dir(subm_path)
+        utils.make_dir(subm_path)
         for f in subm.find_all(class_='fileuploadsubmission'):
             name = f.a.contents[0]
             link = f.a['href']
@@ -140,7 +142,7 @@ class Client:
         return subm_data
 
     def __download_new_assignment_data(self, assign_id, path):
-        submissions_page = utils.get_view_submissions_page(MOODLE_DOMAIN, assign_id)
+        submissions_page = moodleutils.get_view_submissions_page(MOODLE_DOMAIN, assign_id)
         self.__browser.open(submissions_page)
         table = self.__browser.find(class_='flexible generaltable generalbox')
 
@@ -200,6 +202,8 @@ class Client:
             # it is necessary to update form even if the data is the same
             old_comment = form['quickgrade_comments_' + subm.user_id].value
             new_comment = subm.comment
+            if new_comment is None:
+                new_comment = ''
             if new_comment == old_comment:
                 new_comment += ' '
             form['quickgrade_comments_' + subm.user_id] = new_comment
