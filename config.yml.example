@@ -1,0 +1,13 @@
+
+moodle:
+    username: gXXXXXX
+    password: XXXXXXX
+    course_id: 21642
+    data_path: ./moodle/data # Optional
+    timeout: 2 # Optional
+    max_retries: 2 # Optional
+
+eval: # Optional
+    data_path: ./eval/data
+
+interval: 120 # Optional
