@@ -2,10 +2,10 @@ import json
 import os
 import shutil
 
-def make_dir(path, logger=None):
+def make_dir(path):
     os.makedirs(path, exist_ok=True)
 
-def remove_dir(path, logger=None):
+def remove_dir(path):
     shutil.rmtree(path, ignore_errors=True) # FIXME ignore only certain errors
 
 def copy_file(fpath, dest_dir, logger=None):

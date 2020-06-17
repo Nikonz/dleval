@@ -45,9 +45,10 @@ class Client:
         self.__browser.open(main_page)
         return self.__browser.url == main_page
 
-    def download_new_course_data(self, course_id):
+    def download_new_course_data(self, course_id, allowed_assignments):
         """
         :param int course_id: Id of the course (can be found in the course url)
+        :param set allowed_assignments: Ids or/and names of allowed assignments
         """
         main_page = moodleutils.get_course_main_page(MOODLE_DOMAIN, course_id)
         self.__browser.open(main_page)
@@ -58,6 +59,15 @@ class Client:
         for section in self.__browser.find_all(class_='section main clearfix'):
             for assign in section.find_all(class_='activity assign modtype_assign'):
                 assign_id = assign['id'].split('-')[1]
+                assign_name = assign.find(class_='instancename').contents[0]
+
+                if assign_id not in allowed_assignments and \
+                        assign_name not in allowed_assignments:
+                    self.__logger.warning('Assignment is not allowed, skip ' \
+                            '[id={}, name=`{}\']'.format(
+                            assign_id, assign_name))
+                    continue
+
                 assign_data = self.__download_new_assignment_data(
                         assign_id, self.__data_path)
                 course_data.add_assignment(assign_data)

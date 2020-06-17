@@ -44,7 +44,7 @@ class DlEval:
         eval_data_path = DEFAULT_EVAL_DATA_PATH
         if 'eval' in self.__cfg and 'data_path' in self.__cfg['data_path']:
             eval_data_path = self.__cfg['data_path']
-        self.__evaluator = Evaluator(eval_data_path)
+        self.__evaluator = Evaluator(eval_data_path, self.__logger)
 
     def run(self):
         while True:
@@ -55,16 +55,17 @@ class DlEval:
                 if not ok:
                     self.__logger.error('login failed')
                 else:
+                    allowed_assignments = \
+                            self.__evaluator.get_allowed_assignments()
                     course_data = self.__client.download_new_course_data(
-                            self.__cfg['moodle']['course_id'])
+                            self.__cfg['moodle']['course_id'],
+                            allowed_assignments)
                     self.__evaluator.evaluate(course_data)
                     self.__client.send_feedback(course_data)
             except:
-                tback = repr(traceback.format_exception(*sys.exc_info()))
-                self.__logger.critical(
-                        'an exception occured!\n' + tback)
+                tback = ''.join(traceback.format_exception(*sys.exc_info()))
+                self.__logger.critical('an exception occured!\n' + tback)
             sleep(self.__cfg.get('interval', DEFAULT_INTERVAL))
-            #sleep(2)
 
 if __name__ == "__main__":
     parser = ArgumentParser()

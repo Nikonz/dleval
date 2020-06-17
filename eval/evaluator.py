@@ -10,30 +10,53 @@ IMAGE_NAME = 'dleval_submission'
 CONTAINER_NAME = 'dleval_submission'
 
 class Evaluator:
-    def __init__(self, data_path):
-        self.__docker = docker.from_env()
+    def __init__(self, data_path, logger):
         self.__data_path = data_path
+        self.__logger = logger
+        self.__docker = docker.from_env()
+
+    def get_allowed_assignments(self):
+        assignments = set()
+        for name in os.listdir(self.__data_path):
+            path = os.path.join(self.__data_path, name)
+            eval_path = os.path.join(path, 'eval.py')
+            if os.path.isfile(eval_path):
+                assignments.add(name)
+        return assignments
 
     def evaluate(self, course_data):
         """
         :param moodle.objects.Course feedback: course data
         """
         for assign in course_data.assignments():
+            self.__logger.info('Evaluating assignment submissions ' \
+                    '[id={}, name={}]'.format(assign.id, assign.name))
             for subm in assign.submissions():
-                self.__eval_submission(subm, assign)
+                if self.__eval_submission(subm, assign):
+                    self.__logger.info('Submission was evaluated: ' \
+                            'grade={}, comment={} ' \
+                            '[user_id={}, timestamp={}]'.format(subm.user_id,
+                            subm.timestamp, subm.grade, subm.comment))
+                else:
+                    self.__logger.warning('Submission was NOT evaluated ' \
+                            '[user_id={}, timestamp={}]'.format(
+                            subm.user_id, subm.timestamp))
 
     def __eval_submission(self, subm, assign):
         utils.remove_dir(DOCKER_BUILD_DIR)
         utils.make_dir(DOCKER_BUILD_DIR)
 
-        print(DOCKER_BUILD_DIR, assign.name)
+        allowed_assignments = self.get_allowed_assignments()
+        subm_evaluator_path = ''
 
-        subm_evaluator_path = os.path.join(self.__data_path, assign.id)
-        if not os.path.isdir(subm_evaluator_path):
+        if assign.id in allowed_assignments:
+            subm_evaluator_path = os.path.join(self.__data_path, assign.id)
+        elif assign.name in allowed_assignments:
             subm_evaluator_path = os.path.join(self.__data_path, assign.name)
-        if not os.path.isdir(subm_evaluator_path):
-            # TODO log
-            return
+        else:
+            self.__logger.error('Evaluator was not found for assignment ' \
+                    '[id={}, name=`{}\']'.format(assign.id, assign.name))
+            return False
 
         utils.copy_file(os.path.join(DOCKER_DIR, 'eval_launcher.py'),
                 DOCKER_BUILD_DIR)
@@ -54,36 +77,42 @@ class Evaluator:
             container = self.__docker.containers.get(CONTAINER_NAME) # ugly
             container.remove()
         except:
-            # TODO log
-            print('CONTAINER!')
-            pass
-
+            self.__logger.error('Can not remove docker container ' \
+                    '[user_id={}, timestamp={}]'.format(
+                    subm.user_id, subm.timestamp))
         try:
             self.__docker.images.remove(IMAGE_NAME, force=True)
         except:
-            print('IMAGE!')
-            pass
+            self.__logger.error('Can not remove image ' \
+                    '[user_id={}, timestamp={}]'.format(
+                    subm.user_id, subm.timestamp))
 
-        parsed_result, ok = utils.parse_json(stdout)
-        print(stdout)
+        parsed_result, ok = utils.parse_json(stdout, self.__logger)
         if not ok:
-            #self.logger.warning('parse_json_failed, skip' + log_msg_suffix)
-            print(1)
-            return
+            self.__logger.warning('parse_json failed, raw=`{}\' ' \
+                    '[user_id={}, timestamp={}]'.format(
+                    stdout, subm.user_id, subm.timestamp))
+            return False
         if parsed_result is None:
-            #self.logger.error('unexpected empty response' + log_msg_suffix)
-            print(2)
-            return
+            self.__logger.error('Response is missing ' \
+                    '[user_id={}, timestamp={}]'.format(
+                    subm.user_id, subm.timestamp))
+            return False
 
         grade = parsed_result.get('grade')
-        if grade is None:
-            #self.logger.error('no grade' + log_msg_suffix)
-            return
-
         comment = parsed_result.get('comment');
+
+        if grade is None:
+            self.__logger.error('Grade is missing ' \
+                    '[user_id={}, timestamp={}]'.format(
+                    subm.user_id, subm.timestamp))
+            return False
         if comment is None:
-            #self.logger.error('no explanation' + log_msg_suffix)
-            return
+            self.__logger.error('Comment is missing ' \
+                    '[user_id={}, timestamp={}]'.format(
+                    subm.user_id, subm.timestamp))
+            return False
 
         subm.grade = grade
         subm.comment = comment
+        return True
