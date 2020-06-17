@@ -46,8 +46,9 @@ class Assignment:
         return self.__name
 
 class Submission:
-    def __init__(self, user_id, timestamp, path):
+    def __init__(self, user_id, username, timestamp, path):
         self.__user_id = user_id
+        self.__username = username
         self.__timestamp = timestamp
         self.__path = path
         self.__grade = None
@@ -65,6 +66,10 @@ class Submission:
     @property
     def user_id(self):
         return self.__user_id
+
+    @property
+    def username(self):
+        return self.__username
 
     @property
     def timestamp(self):

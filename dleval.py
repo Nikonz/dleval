@@ -53,7 +53,7 @@ class DlEval:
                         self.__cfg['moodle']['username'],
                         self.__cfg['moodle']['password'])
                 if not ok:
-                    self.__logger.error('login failed')
+                    self.__logger.critical('login failed')
                 else:
                     allowed_assignments = \
                             self.__evaluator.get_allowed_assignments()

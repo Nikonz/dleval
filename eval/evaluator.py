@@ -33,14 +33,16 @@ class Evaluator:
                     '[id={}, name={}]'.format(assign.id, assign.name))
             for subm in assign.submissions():
                 if self.__eval_submission(subm, assign):
+                    comment_line = '\\n'.join(subm.comment.split('\n'))
                     self.__logger.info('Submission was evaluated: ' \
-                            'grade={}, comment={} ' \
-                            '[user_id={}, timestamp={}]'.format(subm.user_id,
-                            subm.timestamp, subm.grade, subm.comment))
+                            'grade={}, comment=`{}\' ' \
+                            '[user_id={}, username=`{}\', timestamp={}]'.format(
+                            subm.grade, comment_line,
+                            subm.user_id, subm.username, subm.timestamp))
                 else:
                     self.__logger.warning('Submission was NOT evaluated ' \
-                            '[user_id={}, timestamp={}]'.format(
-                            subm.user_id, subm.timestamp))
+                            '[user_id={}, username=`{}\', timestamp={}]'.format(
+                            subm.user_id, subm.username, subm.timestamp))
 
     def __eval_submission(self, subm, assign):
         utils.remove_dir(DOCKER_BUILD_DIR)
@@ -68,9 +70,17 @@ class Evaluator:
             dfile.write('FROM dleval\n' +
                     'COPY . .\n' +
                     'CMD python eval_launcher.py\n')
-        self.__docker.images.build(path=DOCKER_BUILD_DIR,
-                tag=IMAGE_NAME, rm=True, forcerm=True)
-        # TODO log image id
+        try:
+            self.__docker.images.build(path=DOCKER_BUILD_DIR,
+                    tag=IMAGE_NAME, rm=True, forcerm=True)
+        except Exception as e:
+            errmsg = e.message if hasattr(e, 'message') else str(e)
+            self.__logger.critical('Can not build docker image, reason=`{}\', ' \
+                    'have you forgotten `sudo\' or `newgrp docker\'? ' \
+                    '[user_id={}, username=`{}\', timestamp={}]'.format(
+                    errmsg, subm.user_id, subm.username, subm.timestamp))
+            return False
+        # TODO log image id ?
         # TODO handle stderr
         stdout = self.__docker.containers.run(IMAGE_NAME, name=CONTAINER_NAME)
         try:
@@ -78,25 +88,25 @@ class Evaluator:
             container.remove()
         except:
             self.__logger.error('Can not remove docker container ' \
-                    '[user_id={}, timestamp={}]'.format(
-                    subm.user_id, subm.timestamp))
+                    '[user_id={}, username=`{}\', timestamp={}]'.format(
+                    subm.user_id, subm.username, subm.timestamp))
         try:
             self.__docker.images.remove(IMAGE_NAME, force=True)
         except:
             self.__logger.error('Can not remove image ' \
-                    '[user_id={}, timestamp={}]'.format(
-                    subm.user_id, subm.timestamp))
+                    '[user_id={}, username=`{}\', timestamp={}]'.format(
+                    subm.user_id, subm.username, subm.timestamp))
 
         parsed_result, ok = utils.parse_json(stdout, self.__logger)
         if not ok:
             self.__logger.warning('parse_json failed, raw=`{}\' ' \
-                    '[user_id={}, timestamp={}]'.format(
-                    stdout, subm.user_id, subm.timestamp))
+                    '[user_id={}, username=`{}\', timestamp={}]'.format(
+                    subm.user_id, subm.username, subm.timestamp))
             return False
         if parsed_result is None:
             self.__logger.error('Response is missing ' \
-                    '[user_id={}, timestamp={}]'.format(
-                    subm.user_id, subm.timestamp))
+                    '[user_id={}, username=`{}\', timestamp={}]'.format(
+                    subm.user_id, subm.username, subm.timestamp))
             return False
 
         grade = parsed_result.get('grade')
@@ -104,13 +114,13 @@ class Evaluator:
 
         if grade is None:
             self.__logger.error('Grade is missing ' \
-                    '[user_id={}, timestamp={}]'.format(
-                    subm.user_id, subm.timestamp))
+                    '[user_id={}, username=`{}\', timestamp={}]'.format(
+                    subm.user_id, subm.username, subm.timestamp))
             return False
         if comment is None:
             self.__logger.error('Comment is missing ' \
-                    '[user_id={}, timestamp={}]'.format(
-                    subm.user_id, subm.timestamp))
+                    '[user_id={}, username=`{}\', timestamp={}]'.format(
+                    subm.user_id, subm.username, subm.timestamp))
             return False
 
         subm.grade = grade

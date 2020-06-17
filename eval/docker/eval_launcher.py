@@ -6,7 +6,7 @@ grade = sum(scores.values())
 
 comment = ''
 for key, value in scores.items():
-    comment += '{}: {},\n'.format(key, value)
+    comment += '{}: {}\n'.format(key, value)
 if len(comment) > 0:
     comment = comment[:-2]
 

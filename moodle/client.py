@@ -135,18 +135,18 @@ class Client:
                 if subm_data.timestamp != subm_ts:
                     self.__logger.warning(
                             'Outdated submission, skip ' \
-                            '[user_id={}, timestamp={}]'.format(
-                            subm_data.user_id, subm_data.timestamp))
+                            '[user_id={}, username=`{}\', timestamp={}]'.format(
+                            subm_data.user_id, subm_data.username, subm_data.timestamp))
                     continue
                 if not self.__fill_grading_form(grading_form, subm_data):
                     self.__logger.error(
                             'Can not fill grading form for submission, skip ' \
-                            '[user_id={}, timestamp={}]'.format(
-                            subm_data.user_id, subm_data.timestamp))
+                            '[user_id={}, username=`{}\', timestamp={}]'.format(
+                            subm_data.user_id, subm_data.username, subm_data.timestamp))
                     continue
                 self.__logger.info('Grading form was filled successfully '\
-                        '[user_id={}. timestamp={}]'.format(
-                        subm_data.user_id, subm_data.timestamp))
+                        '[user_id={}, username=`{}\', timestamp={}]'.format(
+                        subm_data.user_id, subm_data.username, subm_data.timestamp))
 
             self.__browser.submit_form(grading_form)
             self.__logger.info('Grading form was submitted for assignment ' \
@@ -173,10 +173,11 @@ class Client:
 
     def __download_submission(self, subm, path):
         user_id = subm['class'][0][4:]
+        username = subm.find(class_='cell c2').a.contents[0]
         timestamp = self.__parse_timestamp(subm.find(class_='cell c7').contents[0])
 
         subm_path = os.path.join(path, 'user_' + user_id)
-        subm_data = Submission(user_id, timestamp, subm_path)
+        subm_data = Submission(user_id, username, timestamp, subm_path)
 
         utils.remove_dir(subm_path)
         utils.make_dir(subm_path)
@@ -185,13 +186,13 @@ class Client:
             link = f.a['href']
             if not self.__download_file(link, os.path.join(subm_path, name)):
                 self.__logger.warning('Can not download file `{}\', ' \
-                        'skip submission [user_id={}, timestamp={}]'.format(
-                        subm_data.user_id, subm_data.timestamp))
+                        'skip submission [user_id={}, username=`{}\', timestamp={}]'.format(
+                        subm_data.user_id, subm_data.username, subm_data.timestamp))
                 return None
             else:
                 self.__logger.info('Got file `{}\' ' \
-                        '[user_id={}, timerstamp={}]'.format(
-                        name, subm_data.user_id, subm_data.timestamp))
+                        '[user_id={}, username=`{}\', timerstamp={}]'.format(name,
+                        subm_data.user_id, subm_data.username, subm_data.timestamp))
         return subm_data
 
     def __download_new_assignment_data(self, assign_id, path):
@@ -209,22 +210,24 @@ class Client:
                 continue
             graded = subm.find(class_='submissiongraded')
             user_id = subm['class'][0][4:]
+            username = subm.find(class_='cell c2').a.contents[0]
             subm_ts = self.__parse_timestamp(subm.find(class_='cell c7').contents[0])
             grade_ts = self.__parse_timestamp(subm.find(class_='cell c10').contents[0])
             if graded and subm_ts + 60 < grade_ts: # XXX +1 minute - to retest in case of delays
                 self.__logger.debug('Submission is already graded ' \
-                        '[user_id={}, subm_ts={}, grade_ts={}]'.format(
-                        user_id, subm_ts, grade_ts))
+                        '[user_id={}, username=`{}\', subm_ts={}, grade_ts={}]'.format(
+                        user_id, username, subm_ts, grade_ts))
                 continue
             subm_data = self.__download_submission(subm, assign_path)
             if subm_data is not None:
                 self.__logger.info('Got submission data ' \
-                        '[user_id={}, timestamp={}]'.format(
-                        subm.user_id, subm.timestamp))
+                        '[user_id={}, username=`{}\', timestamp={}]'.format(
+                        subm_data.user_id, subm_data.username, subm_data.timestamp))
                 assign_data.add_submission(subm_data)
             else:
                 self.__logger.warning('Submission data is not downloaded, skip ' \
-                        '[user_id={}, timestamp={}]'.format(user_id, subm_ts))
+                        '[user_id={}, username=`{}\', timestamp={}]'.format(
+                        user_id, username, subm_ts))
         return assign_data
 
     def __download_new_section_data(self, section, path):
