@@ -16,6 +16,9 @@ class Evaluator:
         self.__docker = docker.from_env()
 
     def get_allowed_assignments(self):
+        if not os.path.isdir(self.__data_path):
+            return set()
+
         assignments = set()
         for name in os.listdir(self.__data_path):
             path = os.path.join(self.__data_path, name)
@@ -45,11 +48,8 @@ class Evaluator:
                             subm.user_id, subm.username, subm.timestamp))
 
     def __eval_submission(self, subm, assign):
-        utils.remove_dir(DOCKER_BUILD_DIR)
-        utils.make_dir(DOCKER_BUILD_DIR)
-
         allowed_assignments = self.get_allowed_assignments()
-        subm_evaluator_path = ''
+        subm_evaluator_path = None
 
         if assign.id in allowed_assignments:
             subm_evaluator_path = os.path.join(self.__data_path, assign.id)
@@ -60,11 +60,15 @@ class Evaluator:
                     '[id={}, name=`{}\']'.format(assign.id, assign.name))
             return False
 
+        utils.remove_dir(DOCKER_BUILD_DIR)
+        utils.make_dir(DOCKER_BUILD_DIR)
         utils.copy_file(os.path.join(DOCKER_DIR, 'eval_launcher.py'),
                 DOCKER_BUILD_DIR)
-        # TODO subdirs
-        utils.copy_all_files(subm.path, DOCKER_BUILD_DIR)
         utils.copy_all_files(subm_evaluator_path, DOCKER_BUILD_DIR)
+
+        utils.make_dir(os.path.join(DOCKER_BUILD_DIR, 'submission'))
+        utils.copy_all_files(subm.path,
+                os.path.join(DOCKER_BUILD_DIR, 'submission'))
 
         with open(os.path.join(DOCKER_BUILD_DIR, 'Dockerfile'), 'w') as dfile:
             dfile.write('FROM dleval\n' +
@@ -81,8 +85,16 @@ class Evaluator:
                     errmsg, subm.user_id, subm.username, subm.timestamp))
             return False
         # TODO log image id ?
-        # TODO handle stderr
-        stdout = self.__docker.containers.run(IMAGE_NAME, name=CONTAINER_NAME)
+        # TODO handle stderr ?
+        stdout = None
+        try:
+            stdout = self.__docker.containers.run(IMAGE_NAME, name=CONTAINER_NAME)
+        except Exception as e:
+            errmsg = e.message if hasattr(e, 'message') else str(e)
+            self.__logger.error('Exception occured during container execution, ' \
+                    'reason=`{}\' [user_id={}, username=`{}\', timestamp={}]'.format(
+                    errmsg, subm.user_id, subm.username, subm.timestamp))
+
         try:
             container = self.__docker.containers.get(CONTAINER_NAME) # ugly
             container.remove()
@@ -97,14 +109,14 @@ class Evaluator:
                     '[user_id={}, username=`{}\', timestamp={}]'.format(
                     subm.user_id, subm.username, subm.timestamp))
 
-        parsed_result, ok = utils.parse_json(stdout, self.__logger)
-        if not ok:
-            self.__logger.warning('parse_json failed, raw=`{}\' ' \
+        if stdout is None:
+            self.__logger.error('Container response is missing ' \
                     '[user_id={}, username=`{}\', timestamp={}]'.format(
                     subm.user_id, subm.username, subm.timestamp))
             return False
+        parsed_result = utils.parse_json(stdout)
         if parsed_result is None:
-            self.__logger.error('Response is missing ' \
+            self.__logger.warning('parse_json() failed, raw=`{}\' ' \
                     '[user_id={}, username=`{}\', timestamp={}]'.format(
                     subm.user_id, subm.username, subm.timestamp))
             return False

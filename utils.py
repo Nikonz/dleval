@@ -22,10 +22,10 @@ def copy_all_files(source_dir, dest_dir, logger=None):
 
 def parse_json(data, logger=None):
     try:
-        return (json.loads(data), True)
+        return json.loads(data)
     except Exception as e:
         errmsg = e.message if hasattr(e, 'message') else str(e)
         if logger is not None:
             logger.error('can not parse json: ' +
                     errmsg + ' [data=%s]' % data)
-        return (None, False)
+        return None
