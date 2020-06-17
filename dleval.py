@@ -37,6 +37,7 @@ class DlEval:
 
         self.__client = Client(
                 self.__cfg['moodle'].get('data_path', DEFAULT_MOODLE_DATA_PATH),
+                self.__logger,
                 self.__cfg['moodle'].get('timeout', DEFAULT_TIMEOUT),
                 self.__cfg['moodle'].get('max_retries', DEFAULT_MAX_RETRIES))
 
@@ -48,18 +49,22 @@ class DlEval:
     def run(self):
         while True:
             try:
-                self.__client.login(
+                ok = self.__client.login(
                         self.__cfg['moodle']['username'],
                         self.__cfg['moodle']['password'])
-                course_data = self.__client.download_new_course_data(
-                        self.__cfg['moodle']['course_id'])
-                self.__evaluator.evaluate(course_data)
-                self.__client.send_feedback(course_data)
+                if not ok:
+                    self.__logger.error('login failed')
+                else:
+                    course_data = self.__client.download_new_course_data(
+                            self.__cfg['moodle']['course_id'])
+                    self.__evaluator.evaluate(course_data)
+                    self.__client.send_feedback(course_data)
             except:
                 tback = repr(traceback.format_exception(*sys.exc_info()))
                 self.__logger.critical(
                         'an exception occured!\n' + tback)
             sleep(self.__cfg.get('interval', DEFAULT_INTERVAL))
+            #sleep(2)
 
 if __name__ == "__main__":
     parser = ArgumentParser()
