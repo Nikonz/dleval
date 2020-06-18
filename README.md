@@ -1,8 +1,6 @@
 # dleval
 New and fancy exercises evaluation system for the "Deep Learning" course!
 
-...[Work in progress]...
-
 ## Prerequisites
 You need **Python3**, **Docker** and python library **Robobrowser**:
 * Instructions for installing **Docker** are available on the official docker website: https://docs.docker.com/engine/install/.
