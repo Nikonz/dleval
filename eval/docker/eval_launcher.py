@@ -8,7 +8,7 @@ comment = ''
 for key, value in scores.items():
     comment += '{}: {}\n'.format(key, value)
 if len(comment) > 0:
-    comment = comment[:-2]
+    comment = comment[:-1]
 
 result = {'grade': grade, 'comment': comment}
 print(json.dumps(result))
