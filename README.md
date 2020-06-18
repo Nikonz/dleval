@@ -1,6 +1,12 @@
 # dleval
 New and fancy exercises evaluation system for the "Deep Learning" course!
 
+## Moodle requirements
+
+* This code is used to evaluate moodle assignments with "Simple direct grading", **not** "Marking guide" or "Rubric".
+* Students need to be able to edit their solutions, not send completely new ones.
+* Do not force english language, because it have issues with correct submission time presentation.
+
 ## Prerequisites
 You need **Python3**, **Docker** and python library **Robobrowser**:
 * Instructions for installing **Docker** are available on the official docker website: https://docs.docker.com/engine/install/.
