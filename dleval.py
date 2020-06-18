@@ -48,8 +48,8 @@ class DlEval:
                 self.__cfg['moodle'].get('max_retries', DEFAULT_MAX_RETRIES))
 
         eval_data_path = DEFAULT_EVAL_DATA_PATH
-        if 'eval' in self.__cfg and 'data_path' in self.__cfg['data_path']:
-            eval_data_path = self.__cfg['data_path']
+        if 'eval' in self.__cfg and 'data_path' in self.__cfg['eval']:
+            eval_data_path = self.__cfg['eval']['data_path']
         self.__evaluator = Evaluator(eval_data_path, self.__logger)
 
     def run(self):
