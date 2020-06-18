@@ -18,13 +18,19 @@ DEFAULT_MAX_RETRIES = 2
 
 DEFAULT_EVAL_DATA_PATH = './eval/data'
 
+LOG_LEVELS = {'critical' : logging.CRITICAL,
+              'error'    : logging.ERROR,
+              'warning'  : logging.WARNING,
+              'info'     : logging.INFO,
+              'debug'    : logging.DEBUG}
+
 class DlEval:
-    def __init__(self, config_path):
+    def __init__(self, config_path, log_level='info'):
         """
         :param str config_path: path to config file
         """
         self.__logger = logging.getLogger()
-        self.__logger.setLevel(logging.INFO)
+        self.__logger.setLevel(LOG_LEVELS[log_level])
         ch = logging.StreamHandler()
         formatter = logging.Formatter(
                 '%(asctime)s [%(levelname)s]: %(message)s ' \
@@ -69,8 +75,12 @@ class DlEval:
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('--config', default=DEFAULT_CONFIG_PATH, help='path to config')
+    parser.add_argument('--config', default=DEFAULT_CONFIG_PATH,
+            help='path to config (default=`config.yml\'')
+    parser.add_argument('--log-level', default='info',
+            help='`critical\', `error\', `warning\', `info\', `debug\' ' \
+            '(default=`info\')')
     args = parser.parse_args()
 
-    dleval = DlEval(args.config)
+    dleval = DlEval(args.config, args.log_level)
     dleval.run()
