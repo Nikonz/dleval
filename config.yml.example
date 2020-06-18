@@ -4,10 +4,10 @@ moodle:
     password: XXXXXXX
     course_id: 21642
     data_path: ./moodle/data # Optional
-    timeout: 2 # Optional
-    max_retries: 2 # Optional
+    timeout: 2 # (in seconds) Optional
+    max_retries: 2 (in seconds) # Optional
 
 eval: # Optional
     data_path: ./eval/data
 
-interval: 120 # Optional
+interval: 120 (in seconds) # Optional
