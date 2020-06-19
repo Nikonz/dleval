@@ -12,9 +12,10 @@ You need **Python3**, **Docker** and python library **Robobrowser**:
 * Instructions for installing **Docker** are available on the official docker website: https://docs.docker.com/engine/install/.
 * Instructions for installing **Robobrowser** are available on https://robobrowser.readthedocs.io/en/latest/installation.html.
 
-Additionally you may need to install some other libraries, e.g. **yaml**:
+Additionally you may need to install some other python libraries, e.g. **yaml** and **docker**:
 
 ` pip install yaml`
+` pip install docker`
 
 ## Building
 
