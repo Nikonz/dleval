@@ -14,8 +14,10 @@ You need **Python3**, **Docker** and python library **Robobrowser**:
 
 Additionally you may need to install some other python libraries, e.g. **yaml** and **docker**:
 
-` pip install yaml`
-` pip install docker`
+```
+pip install yaml
+pip install docker
+```
 
 ## Building
 
