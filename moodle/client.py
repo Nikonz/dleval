@@ -156,8 +156,11 @@ class Client:
     def __parse_timestamp(self, date_str, date_locale='de_DE.utf8'):
         cur_locale = locale.getlocale()
         locale.setlocale(locale.LC_ALL, date_locale) # XXX install locale
-        timestamp = datetime.strptime(
-                date_str, '%A, %d. %B %Y, %H:%M').timestamp()
+        try:
+            timestamp = datetime.strptime(
+                    date_str, '%A, %d %B %Y, %H:%M ').timestamp()
+        except:
+            timestamp = 0.
         locale.setlocale(locale.LC_ALL, cur_locale)
         return timestamp
 
