@@ -56,24 +56,26 @@ class Client:
         course_name = self.__browser.select('.page-header-headings')[0].h1.string
         course_data = Course(course_id, course_name)
 
-        for section in self.__browser.find_all(class_='section main clearfix'):
-            for assign in section.find_all(class_='activity assign modtype_assign'):
-                assign_id = assign['id'].split('-')[1]
-                assign_name = assign.find(class_='instancename').contents[0]
+        classes = ['section main clearfix', 'section main clearfix current']
+        for class_ in classes:
+            for section in self.__browser.find_all(class_=class_):
+                for assign in section.find_all(class_='activity assign modtype_assign'):
+                    assign_id = assign['id'].split('-')[1]
+                    assign_name = assign.find(class_='instancename').contents[0]
 
-                if assign_id not in allowed_assignments and \
-                        assign_name not in allowed_assignments:
-                    self.__logger.warning('Assignment is not allowed, skip ' \
+                    if assign_id not in allowed_assignments and \
+                            assign_name not in allowed_assignments:
+                        self.__logger.warning('Assignment is not allowed, skip ' \
+                                '[id={}, name=`{}\']'.format(
+                                assign_id, assign_name))
+                        continue
+
+                    assign_data = self.__download_new_assignment_data(
+                            assign_id, self.__data_path)
+                    course_data.add_assignment(assign_data)
+                    self.__logger.info('Got assignment data ' \
                             '[id={}, name=`{}\']'.format(
-                            assign_id, assign_name))
-                    continue
-
-                assign_data = self.__download_new_assignment_data(
-                        assign_id, self.__data_path)
-                course_data.add_assignment(assign_data)
-                self.__logger.info('Got assignment data ' \
-                        '[id={}, name=`{}\']'.format(
-                        assign_data.id, assign_data.name))
+                            assign_data.id, assign_data.name))
         return course_data
 
     def send_feedback(self, course_data):
