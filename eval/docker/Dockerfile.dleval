@@ -1,3 +1,4 @@
 FROM continuumio/anaconda3
 
-RUN conda install pytorch torchvision
+#RUN conda install pytorch torchvision
+RUN conda install pytorch torchvision torchaudio cudatoolkit=11.0 -c pytorch
