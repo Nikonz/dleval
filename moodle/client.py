@@ -172,8 +172,12 @@ class Client:
             self.__logger.error('Bad response code: {} ' \
                     '[link=`{}\']'.format(resp.status.code, link))
             return False
-        with open(path, 'w') as f:
-            f.write(resp.content.decode('utf-8'))
+        try:
+            with open(path, 'w') as f:
+                f.write(resp.content.decode('utf-8'))
+        except:
+            with open(path, 'wb') as f:
+                f.write(resp.content)
         return True
 
     def __download_submission(self, subm, path):
