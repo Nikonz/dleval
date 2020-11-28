@@ -53,23 +53,24 @@ class DlEval:
         self.__evaluator = Evaluator(eval_data_path, self.__logger)
 
     def run(self):
-        try:
-            ok = self.__client.login(
-                    self.__cfg['moodle']['username'],
-                    self.__cfg['moodle']['password'])
-            if not ok:
-                self.__logger.critical('login failed')
-            else:
-                allowed_assignments = \
-                        self.__evaluator.get_allowed_assignments()
-                course_data = self.__client.download_new_course_data(
-                        self.__cfg['moodle']['course_id'],
-                        allowed_assignments)
-                self.__evaluator.evaluate(course_data)
-                self.__client.send_feedback(course_data)
-        except:
-            tback = ''.join(traceback.format_exception(*sys.exc_info()))
-            self.__logger.critical('an exception occured!\n' + tback)
+        while True:
+            try:
+                ok = self.__client.login(
+                        self.__cfg['moodle']['username'],
+                        self.__cfg['moodle']['password'])
+                if not ok:
+                    self.__logger.critical('login failed')
+                else:
+                    allowed_assignments = \
+                            self.__evaluator.get_allowed_assignments()
+                    course_data = self.__client.download_new_course_data(
+                            self.__cfg['moodle']['course_id'],
+                            allowed_assignments)
+                    self.__evaluator.evaluate(course_data)
+                    self.__client.send_feedback(course_data)
+            except:
+                tback = ''.join(traceback.format_exception(*sys.exc_info()))
+                self.__logger.critical('an exception occured!\n' + tback)
             sleep(self.__cfg.get('interval', DEFAULT_INTERVAL))
 
 if __name__ == "__main__":
