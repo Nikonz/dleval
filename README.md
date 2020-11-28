@@ -33,7 +33,7 @@ Now create a Docker image for further submissions evaluation. It includes all pa
 
 ## Running
 
-Create a **config.yml** and put there your credentials for the CAS system and the course id (is a part of the course URL). There is **config.yml.example**, which you can use as an example. If you explicitly specify the parameter *interval*, make sure its value is at least 120 (sec, = 2 min). It is important due to the fact that some submissions might be retested to prevent the consequences of possible race conditions between a student and an evaluator.
+Create a **config.yml** and put there your credentials for the CAS system and the course id (is a part of the course URL). There is **config.yml.example**, which you can use as an example. If you explicitly specify the parameter *interval*, make sure its value is at least 120 (sec, = 2 min).
 
 You need to put evaluating code for a moodle assignment into *\`eval/data/folder'*, where instead of *\`folder\`* you must use either assignment id (is a part of the assignment URL) or assignment name. Your code must not contain any subfolders and have a **eval.py** with a evaluate() function as an entry point. evalute() must return a dictionary, where keys are criterias and values are points. You can find an example in *\`eval/data/EXAMPLE'*. Make sure that the maximum number of total points match the number specified in moodle.
 
