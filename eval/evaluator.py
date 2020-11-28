@@ -113,14 +113,17 @@ class Evaluator:
             self.__logger.error('Container response is missing ' \
                     '[user_id={}, username=`{}\', timestamp={}]'.format(
                     subm.user_id, subm.username, subm.timestamp))
-            return False
+            subm.grade = 0
+            subm.comment = 'evaluation failed ' \
+                    '(possible cause: missing files or incorrect file names)'
+            return True
         parsed_result = utils.parse_json(stdout)
         if parsed_result is None:
             self.__logger.warning('parse_json() failed, raw=`?\' ' \
                     '[user_id={}, username=`{}\', timestamp={}]'.format(
                     subm.user_id, subm.username, subm.timestamp))
             return False
-        
+
         grade = parsed_result.get('grade')
         comment = parsed_result.get('comment');
 

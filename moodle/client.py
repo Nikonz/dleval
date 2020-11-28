@@ -3,6 +3,7 @@ import locale
 import os
 import pandas as pd
 import shutil
+import time
 
 from robobrowser import RoboBrowser
 
@@ -156,6 +157,8 @@ class Client:
                     assign_data.id, assign_data.name))
 
     def __parse_timestamp(self, date_str, date_locale='de_DE.utf8'):
+        if date_str == '-':
+            return 0
         cur_locale = locale.getlocale()
         locale.setlocale(locale.LC_ALL, date_locale) # XXX install locale
         timestamp = datetime.strptime(
@@ -224,6 +227,11 @@ class Client:
                         '[user_id={}, username=`{}\', subm_ts={}, grade_ts={}]'.format(
                         user_id, username, subm_ts, grade_ts))
                 continue
+            if time.time() < subm_ts + 120:
+                self.__logger.info('Submission is too new and will be evaluated next time ' \
+                        '[user_id={}, username=`{}\', subm_ts={}, grade_ts={}]'.format(
+                        user_id, username, subm_ts, grade_ts))
+                continue
             subm_data = self.__download_submission(subm, assign_path)
             if subm_data is not None:
                 self.__logger.info('Got submission data ' \
@@ -266,7 +274,9 @@ class Client:
 
     def __fill_grading_form(self, form, subm):
         try:
-            form['quickgrade_' + subm.user_id] = subm.grade
+            # it is impossible to fill the form with 0
+            form['quickgrade_' + subm.user_id] = \
+                    (subm.grade if subm.grade > 0 else 1e-20)
             # it is necessary to update form even if the data is the same
             old_comment = form['quickgrade_comments_' + subm.user_id].value
             new_comment = subm.comment
