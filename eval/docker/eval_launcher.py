@@ -1,7 +1,10 @@
+import contextlib
 import json
+import os
 import eval
 
-scores = eval.evaluate()
+with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
+    scores = eval.evaluate()
 grade = sum(scores.values())
 
 comment = ''
