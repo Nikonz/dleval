@@ -25,7 +25,7 @@ class Client:
         self.__data_path = data_path
         self.__logger = logger
         self.__browser = RoboBrowser(parser='html.parser',
-                timeout=timeout, tries=max_retries, multiplier=1)
+                timeout=timeout, tries=max_retries, multiplier=1, history=False)
 
     def login(self, username, password):
         """
@@ -44,6 +44,7 @@ class Client:
         self.__browser.submit_form(login_form)
 
         self.__browser.open(main_page)
+        self.__browser.parsed.decompose()
         return self.__browser.url == main_page
 
     def download_new_course_data(self, course_id, allowed_assignments):
@@ -54,7 +55,7 @@ class Client:
         main_page = moodleutils.get_course_main_page(MOODLE_DOMAIN, course_id)
         self.__browser.open(main_page)
 
-        course_name = self.__browser.select('.page-header-headings')[0].h1.string
+        course_name = self.__browser.select('.page-header-headings')[0].h1.string[:]
         course_data = Course(course_id, course_name)
 
         classes = ['section main clearfix', 'section main clearfix current']
@@ -77,6 +78,7 @@ class Client:
                     self.__logger.info('Got assignment data ' \
                             '[id={}, name=`{}\']'.format(
                             assign_data.id, assign_data.name))
+        self.__browser.parsed.decompose()
         return course_data
 
     def send_feedback(self, course_data):
@@ -155,6 +157,7 @@ class Client:
             self.__logger.info('Grading form was submitted for assignment ' \
                     '[id={}, name=`{}\']'.format(
                     assign_data.id, assign_data.name))
+            self.__browser.parsed.decompose()
 
     def __parse_timestamp(self, date_str, date_locale='de_DE.utf8'):
         if date_str == '-':
@@ -210,7 +213,7 @@ class Client:
         table = self.__browser.find(class_='flexible generaltable generalbox')
 
         assign_path = os.path.join(path, 'assignment_' + assign_id)
-        assign_name = self.__browser.find(role='main').h2.string
+        assign_name = self.__browser.find(role='main').h2.string[:]
         assign_data = Assignment(assign_id, assign_name)
 
         for subm in table.tbody.find_all('tr'):
@@ -243,13 +246,6 @@ class Client:
                         '[user_id={}, username=`{}\', timestamp={}]'.format(
                         user_id, username, subm_ts))
         return assign_data
-
-    def __download_new_section_data(self, section, path):
-        section_data = []
-        for assign in section.find_all(class_='activity assign modtype_assign'):
-            assign_id = assign['id'].split('-')[1]
-            section_data.append(self.__download_new_assignment_data(assign_id, path))
-        return section_data
 
     def __is_options_form(self, form):
         for field in form.keys():
