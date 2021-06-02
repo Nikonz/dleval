@@ -210,7 +210,10 @@ class Client:
     def __download_new_assignment_data(self, assign_id, path):
         submissions_page = moodleutils.get_view_submissions_page(MOODLE_DOMAIN, assign_id)
         self.__browser.open(submissions_page)
-        table = self.__browser.find(class_='flexible generaltable generalbox')
+        table = self.__browser.find(class_='flexible table table-striped table-hover generaltable generalbox')
+        
+        if table is None:
+           raise ValueError(f'Could not find table on moodle for assignment {assign_id}.')
 
         assign_path = os.path.join(path, 'assignment_' + assign_id)
         assign_name = self.__browser.find(role='main').h2.string[:]
