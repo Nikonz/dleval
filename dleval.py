@@ -1,3 +1,7 @@
+# Patch robobrowser use of werkzeug package
+import werkzeug
+werkzeug.cached_property = werkzeug.utils.cached_property
+
 import logging
 import sys
 import traceback
